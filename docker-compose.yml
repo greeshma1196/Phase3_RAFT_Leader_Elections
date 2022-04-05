@@ -1,0 +1,77 @@
+# This is a sample docker-compose file, Please follow the naming convention for the service and container name, all node
+# names must begin with "Node" followed by their sequence number. For a three node cluster your service/container names
+# should be Node1, Node2 and Node3 as shown below(for service names they will be lowercase). You can add additional
+# parameters and configurations as required by your implementation.
+
+
+version: "3.7"
+services:
+   node1:
+     container_name: Node1
+     build: Node/.
+     ports:
+      - "5000:5555/udp"
+     environment:
+      - PORT=5555
+      - HEARTBEAT_INTERVAL=100
+      - NODE_ID=node1
+      - ALL_NODES=node1,node2,node3,node4,node5
+
+   node2:
+     container_name: Node2
+     build: Node/.
+     ports:
+      - "5001:5555/udp"
+     environment:
+      - PORT=5555
+      - HEARTBEAT_INTERVAL=100
+      - NODE_ID=node2
+      - ALL_NODES=node1,node2,node3,node4,node5
+
+   node3:
+       container_name: Node3
+       build: Node/.
+       ports:
+        - "5002:5555/udp"
+       environment:
+        - PORT=5555
+        - HEARTBEAT_INTERVAL=100
+        - NODE_ID=node3
+        - ALL_NODES=node1,node2,node3,node4,node5
+
+   node4:
+       container_name: Node4
+       build: Node/.
+       ports:
+        - "5003:5555/udp"
+       environment:
+        - PORT=5555
+        - HEARTBEAT_INTERVAL=100
+        - NODE_ID=node4
+        - ALL_NODES=node1,node2,node3,node4,node5
+   
+   node5:
+       container_name: Node5
+       build: Node/.
+       ports:
+        - "5004:5555/udp"
+       environment:
+        - PORT=5555
+        - HEARTBEAT_INTERVAL=100
+        - NODE_ID=node5
+        - ALL_NODES=node1,node2,node3,node4,node5
+
+   #Do not change the part below
+   # controller:
+   #     container_name: Controller
+   #     build: Controller/.
+   #     stdin_open: true
+
+
+
+
+
+
+
+
+
