@@ -209,7 +209,7 @@ def handle_response_vote_granted(socket):
     current_raft_state = RAFT_LEADER
     leader_id = my_node_id
 
-    print(f"{my_node_id} is the new {current_raft_state} and the term is {current_term}, votes received {votes_received} and {len(all_nodes)/2}")
+    print(f"{my_node_id} is the new {current_raft_state} and the term is {current_term}, votes received {votes_received} and the number of nodes are {len(all_nodes)}")
 
     message = {
         "sender_name": my_node_id,
