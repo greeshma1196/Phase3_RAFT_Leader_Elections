@@ -54,8 +54,12 @@ def send_heartbeats(socket):
 
         #check if the raft state is not leader
         if current_raft_state != RAFT_LEADER:
+            time.sleep(heartbeat_interval)
             continue
         
+        request_id = f"{my_node_id}_{current_term}"
+        start_time = time.time_ns()
+
         #if the check fails then it will send a heartbeat to all nodes except itself
         for node in all_nodes:
 
@@ -68,7 +72,9 @@ def send_heartbeats(socket):
                 "term": current_term,
                 "previous_log_index": prev_log_index,
                 "previous_log_term": prev_log_term,
-                "entries": log
+                "entries": log,
+                "request_id": request_id,
+                "start_time": start_time
             }
 
             message = json.dumps(message).encode()
@@ -103,10 +109,6 @@ def election_timeout(socket):
             time.sleep(election_timeout_interval)
             continue
         
-        #if raft state is not leader, check if the node has voted for any other node
-        if voted_for:
-            continue
-        
         #if the previous check fails, then check to see if you have received a heartbeat within the election timeout interval
         if time.time() - last_heartbeat_received < election_timeout_interval:
             time.sleep(election_timeout_interval)
@@ -119,6 +121,9 @@ def election_timeout(socket):
         current_term += 1
         voted_for = my_node_id
         votes_received = 1
+
+        request_id = f"{my_node_id}_{current_term}"
+        start_time = time.time_ns()
 
         #send a request to get vote from all the other nodes in the cluster
         for node in all_nodes:
@@ -133,7 +138,9 @@ def election_timeout(socket):
                 "term": current_term,
                 "previous_log_index": prev_log_index,
                 "previous_log_term": prev_log_term,
-                "entries": log
+                "entries": log,
+                "request_id": request_id,
+                "start_time": start_time
             }
 
             message = json.dumps(message).encode()
@@ -142,7 +149,7 @@ def election_timeout(socket):
             except OSError:
                 pass
 
-def handle_request_get_vote(candidate_term, candidate_id, socket):
+def handle_request_get_vote(candidate_term, candidate_id, socket, request_id, start_time):
 
     global current_term, voted_for
     
@@ -155,7 +162,9 @@ def handle_request_get_vote(candidate_term, candidate_id, socket):
             "term": current_term,
             "previous_log_index": prev_log_index,
             "previous_log_term": prev_log_term,
-            "entries": log
+            "entries": log,
+            "request_id": request_id,
+            "start_time": start_time
         } 
         
         message = json.dumps(message).encode()
@@ -170,7 +179,9 @@ def handle_request_get_vote(candidate_term, candidate_id, socket):
             "term": current_term,
             "previous_log_index": prev_log_index,
             "previous_log_term": prev_log_term,
-            "entries": log
+            "entries": log,
+            "request_id": request_id,
+            "start_time": start_time
         } 
         
         message = json.dumps(message).encode()
@@ -211,32 +222,21 @@ def handle_response_vote_granted(socket):
 
     print(f"{my_node_id} is the new {current_raft_state} and the term is {current_term}, votes received {votes_received} and the number of nodes are {len(all_nodes)}")
 
-    message = {
-        "sender_name": my_node_id,
-        "request": REQUEST_APPEND_ENTRY,
-        "term": current_term,
-        "previous_log_index": prev_log_index,
-        "previous_log_term": prev_log_term,
-        "entries": log
-    }
+def handle_request_append_entry(leader_term, leader_node_id, socket, request_id, start_time):
 
-    message = json.dumps(message).encode()
-    return socket.sendto(message, (my_node_id, port))
-
-def handle_request_append_entry(leader_term, leader_node_id, socket):
-
-    global voted_for, last_heartbeat_received, leader_id, current_raft_state
+    global voted_for, last_heartbeat_received, leader_id, current_raft_state, current_term
     
     #if the node's term is greater than the leader's term then it will not accept any entry request from the leader
     if current_term > leader_term:
         return
     
     leader_id = leader_node_id
+    current_term = leader_term
     #current election has ended
     last_heartbeat_received = time.time()
 
-    # if current_raft_state != RAFT_FOLLOWER:
-    #     current_raft_state = RAFT_FOLLOWER
+    if current_raft_state != RAFT_FOLLOWER:
+        current_raft_state = RAFT_FOLLOWER
 
     #reseting voted_for so that it can cast a new vote in the next election term
     voted_for = ""
@@ -247,7 +247,9 @@ def handle_request_append_entry(leader_term, leader_node_id, socket):
         "term": current_term,
         "previous_log_index": prev_log_index,
         "previous_log_term": prev_log_term,
-        "entries": log
+        "entries": log,
+        "request_id": request_id,
+        "start_time": start_time
     } 
         
     message = json.dumps(message).encode()
@@ -269,7 +271,7 @@ def handle_request_convert_follower():
 
 def handle_request_leader_info(controller_address, socket):
     
-    print(f"This is {my_node_id} and my leader is {leader_id} for term {current_term}")
+    print(f"Node: {my_node_id} \n Leader: {leader_id} \n Term: {current_term} \n Current raft state: {current_raft_state}")
     message = {
         "sender_name": my_node_id,
         "request": RESPONSE_LEADER_INFO,
@@ -359,16 +361,23 @@ class RequestHandler(socketserver.DatagramRequestHandler):
         previous_log_index = data.get("previous_log_index", None)
         previous_log_term = data.get("previous_log_term", None)
         entries = data.get("entries", None)
+        request_id = data.get("request_id", None)
+        start_time = data.get("start_time", None)
+
+        if request_id is not None and request_id.startswith(str(my_node_id)):
+            time_elapsed = time.time_ns() - start_time
+            #print(f"Request-Response time for {my_node_id} is {time_elapsed/1000000}")
+
 
         #check for thre request being passed
         if request == REQUEST_GET_VOTE:
-            return handle_request_get_vote(term, sender_name, socket)
+            return handle_request_get_vote(term, sender_name, socket, request_id, start_time)
 
         if request == RESPONSE_VOTE_GRANTED:
             return handle_response_vote_granted(socket)
         
         if request == REQUEST_APPEND_ENTRY:
-            return handle_request_append_entry(term, sender_name, socket)
+            return handle_request_append_entry(term, sender_name, socket, request_id, start_time)
         
         if request == REQUEST_CONVERT_FOLLOWER:
             #set delay to prevent abrupt behaviour
