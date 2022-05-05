@@ -10,7 +10,7 @@ services:
      container_name: Node1
      build: Node/.
      ports:
-      - "5000:5555/udp"
+      - "5001:5555/udp"
      environment:
       - PORT=5555
       - HEARTBEAT_INTERVAL=100
@@ -21,7 +21,7 @@ services:
      container_name: Node2
      build: Node/.
      ports:
-      - "5001:5555/udp"
+      - "5002:5555/udp"
      environment:
       - PORT=5555
       - HEARTBEAT_INTERVAL=100
@@ -32,7 +32,7 @@ services:
        container_name: Node3
        build: Node/.
        ports:
-        - "5002:5555/udp"
+        - "5003:5555/udp"
        environment:
         - PORT=5555
         - HEARTBEAT_INTERVAL=100
@@ -43,7 +43,7 @@ services:
        container_name: Node4
        build: Node/.
        ports:
-        - "5003:5555/udp"
+        - "5004:5555/udp"
        environment:
         - PORT=5555
         - HEARTBEAT_INTERVAL=100
@@ -54,7 +54,7 @@ services:
        container_name: Node5
        build: Node/.
        ports:
-        - "5004:5555/udp"
+        - "5005:5555/udp"
        environment:
         - PORT=5555
         - HEARTBEAT_INTERVAL=100

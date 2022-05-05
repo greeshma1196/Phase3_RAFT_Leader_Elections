@@ -152,11 +152,19 @@ def election_timeout(socket):
             if node == my_node_id:
                 continue
             
+            if len(log) > 0:
+                last_log_index = len(log)-1
+                last_log_term = log[-1]['term']
+            else:
+                last_log_index = -1
+                last_log_term = -1
+
             message = {
                 "sender_name": my_node_id,
                 "request": REQUEST_GET_VOTE,
                 "term": current_term,
-                "entries": log,
+                "last_log_index": last_log_index,
+                "last_log_term": last_log_term,
                 "request_id": request_id,
                 "start_time": start_time
             }
@@ -167,7 +175,7 @@ def election_timeout(socket):
             except OSError:
                 pass
 
-def handle_request_get_vote(candidate_term, candidate_id, socket, entries, request_id, start_time):
+def handle_request_get_vote(candidate_term, candidate_id, socket, entries, request_id, start_time, last_log_index, last_log_term):
 
     global current_term, voted_for
     
@@ -201,7 +209,14 @@ def handle_request_get_vote(candidate_term, candidate_id, socket, entries, reque
         message = json.dumps(message).encode()
         return socket.sendto(message, (candidate_id, port))
     
-    if len(entries)-1 < len(log)-1:
+    if len(log) > 0:
+        follower_last_log_index = len(log)-1
+        follower_last_log_term = log[-1]['term']
+    else:
+        follower_last_log_index = -1
+        follower_last_log_term = -1
+
+    if last_log_index < follower_last_log_index or last_log_term < follower_last_log_term:
         print(f"{my_node_id} denied vote for {candidate_id} because follower node has more log entries than leader node")
         message = {
             "sender_name": my_node_id,
@@ -502,8 +517,11 @@ class RequestHandler(socketserver.DatagramRequestHandler):
         success = data.get("success", None)
         next_index = data.get("next_index", None)
         match_index = data.get("match_index", None)
+        last_log_index = data.get("last_log_index", None)
+        last_log_term = data.get("last_log_term", None)
         request_id = data.get("request_id", None)
         start_time = data.get("start_time", None)
+
 
         if request_id is not None and request_id.startswith(str(my_node_id)):
             time_elapsed = time.time_ns() - start_time
@@ -512,7 +530,7 @@ class RequestHandler(socketserver.DatagramRequestHandler):
 
         #check for thre request being passed
         if request == REQUEST_GET_VOTE:
-            return handle_request_get_vote(term, sender_name, socket, entries, request_id, start_time)
+            return handle_request_get_vote(term, sender_name, socket, entries, request_id, start_time, last_log_index, last_log_term)
 
         if request == RESPONSE_VOTE_GRANTED:
             return handle_response_vote_granted(socket)
