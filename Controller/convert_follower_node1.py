@@ -22,7 +22,8 @@ msg['sender_name'] = sender
     # SHUTDOWN
     # LEADER_INFO
     # STORE
-msg['request'] = "SHUTDOWN" 
+    # RETRIEVE
+msg['request'] = "RETRIEVE" 
 msg['entries'] = []
 
 # Socket Creation and Binding
@@ -34,9 +35,9 @@ try:
     # Encoding and sending the message
     # Developer's note: Comment/Uncomment any of the following nodes with the request message\
     # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5001)) #node1
-    skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5002)) #node2
+    # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5002)) #node2
     # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5003)) #node3
-    # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5004)) #node4
+    skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5004)) #node4
     # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5005)) #node5
 except:
     #  socket.gaierror: [Errno -3] would be thrown if target IP container does not exist or exits, write your listener

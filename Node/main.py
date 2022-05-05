@@ -39,13 +39,14 @@ REQUEST_LEADER_INFO = "LEADER_INFO"
 REQUEST_TIMEOUT = "TIMEOUT"
 REQUEST_SHUTDOWN = "SHUTDOWN"
 REQUEST_STORE = "STORE"
+REQUEST_RETRIEVE = "RETRIEVE"
 RESPONSE_VOTE_DENIED = "VOTE_DENIED"
 RESPONSE_VOTE_GRANTED = "VOTE_ACK"
 RESPONSE_ENTRY_APPENDED = "ENTRY_APPENDED"
 RESPONSE_APPEND_ENTRY_FAILED = "ENTRY_APPEND_FAILED"
 RESPONSE_LEADER_INFO = "RESPONSE_LEADER_INFO"
 RESPONSE_SHUTDOWN_NODE = "RESPONSE_SHUTDOWN_NODE"
-
+RESPONSE_RETRIEVE = "RESPONSE_RETRIEVE"
 
 __wait_check = False
 __request_shutdown_check = False
@@ -401,13 +402,11 @@ def handle_request_convert_follower():
 
 def handle_request_leader_info(controller_address, socket):
     
-    print(f"Node: {my_node_id} \n Leader: {leader_id} \n Term: {current_term} \n Current raft state: {current_raft_state} \n Logs: {log}")
+    print(f"Node: {my_node_id} \n Leader: {leader_id} \n Term: {current_term} \n Current raft state: {current_raft_state}")
     message = {
         "sender_name": my_node_id,
         "request": RESPONSE_LEADER_INFO,
         "term": current_term,
-        # "previous_log_index": prev_log_index,
-        # "previous_log_term": prev_log_term,
         "entries": log,
         "key": "LEADER",
         "value": leader_id
@@ -493,6 +492,34 @@ def handle_request_store(socket, entries, controller_address):
 
         message = json.dumps(message).encode()
         socket.sendto(message, controller_address)
+    
+def handle_request_retrieve(controller_address, socket):
+    if current_raft_state == RAFT_LEADER:
+        print(f"Leader: {leader_id} \n Term: {current_term} \n Current raft state: {current_raft_state} \n Logs: {log}")
+
+        message = {
+            "sender_name": my_node_id,
+            "request": RESPONSE_LEADER_INFO,
+            "term": current_term,
+            "key": "COMMITTED_LOGS",
+            "value": log
+        }
+
+        message = json.dumps(message).encode()
+        socket.sendto(message, controller_address)
+    
+    else:
+        print(f"Node: {my_node_id} \n Leader: {leader_id} \n Term: {current_term} \n Current raft state: {current_raft_state}")
+        message = {
+            "sender_name": my_node_id,
+            "request": RESPONSE_LEADER_INFO,
+            "term": None,
+            "key": "LEADER",
+            "value": leader_id
+        }
+
+        message = json.dumps(message).encode()
+        socket.sendto(message, controller_address)
 
 class RequestHandler(socketserver.DatagramRequestHandler):
     def handle(self):
@@ -563,7 +590,8 @@ class RequestHandler(socketserver.DatagramRequestHandler):
         if request == REQUEST_STORE:
             return handle_request_store(socket, entries, controller_address)
         
-        
+        if request == REQUEST_RETRIEVE:
+            handle_request_retrieve(controller_address, socket)     
             
 if __name__ == "__main__":
 
