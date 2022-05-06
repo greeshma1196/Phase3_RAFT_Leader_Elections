@@ -23,8 +23,8 @@ msg['sender_name'] = sender
     # LEADER_INFO
     # STORE
     # RETRIEVE
-msg['request'] = "STORE" 
-msg['entries'] = ['1','2','3']
+msg['request'] = "SHUTDOWN" 
+msg['entries'] = ['7']
 
 # Socket Creation and Binding
 skt = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
@@ -34,10 +34,10 @@ skt.bind((sender, port))
 # Send Message
 try:
     # Encoding and sending the message
-    # Developer's note: Comment/Uncomment any of the following nodes with the request message\
-    skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5001)) #node1
+    # Developer's note: Comment/Uncomment any of the following nodes with the request message
+    # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5001)) #node1
     # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5002)) #node2
-    # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5003)) #node3
+    skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5003)) #node3
     # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5004)) #node4
     # skt.sendto(json.dumps(msg).encode('utf-8'), (sender, 5005)) #node5
 

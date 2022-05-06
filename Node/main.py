@@ -171,8 +171,7 @@ def handle_request_get_vote(candidate_term, candidate_id, socket, last_log_index
         message = {
             "sender_name": my_node_id,
             "request": RESPONSE_VOTE_DENIED,
-            "term": current_term,
-            "entries": log
+            "term": current_term
         } 
         
         message = json.dumps(message).encode()
@@ -184,8 +183,7 @@ def handle_request_get_vote(candidate_term, candidate_id, socket, last_log_index
         message = {
             "sender_name": my_node_id,
             "request": RESPONSE_VOTE_DENIED,
-            "term": current_term,
-            "entries": log
+            "term": current_term
         } 
         
         message = json.dumps(message).encode()
@@ -203,8 +201,7 @@ def handle_request_get_vote(candidate_term, candidate_id, socket, last_log_index
         message = {
             "sender_name": my_node_id,
             "request": RESPONSE_VOTE_DENIED,
-            "term": current_term,
-            "entries": log
+            "term": current_term
         } 
         
         message = json.dumps(message).encode()
