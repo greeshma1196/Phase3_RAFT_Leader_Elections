@@ -1,11 +1,8 @@
 import json
-import sys
 import threading
 import os
 import time
 from random import randrange
-import socket
-import traceback
 import socketserver
 
 heartbeat_interval = int(os.getenv('HEARTBEAT_INTERVAL'))/1000
@@ -20,8 +17,6 @@ RAFT_FOLLOWER = "FOLLOWER"
 RAFT_CANDIDATE = "CANDIDATE"
 
 log = []
-prev_log_index = -1
-prev_log_term = -1
 commit_index = 0
 leader_id = ""
 next_index = {}
@@ -44,9 +39,9 @@ RESPONSE_VOTE_DENIED = "VOTE_DENIED"
 RESPONSE_VOTE_GRANTED = "VOTE_ACK"
 RESPONSE_ENTRY_APPENDED = "ENTRY_APPENDED"
 RESPONSE_APPEND_ENTRY_FAILED = "ENTRY_APPEND_FAILED"
-RESPONSE_LEADER_INFO = "RESPONSE_LEADER_INFO"
+RESPONSE_LEADER_INFO = "LEADER_INFO"
 RESPONSE_SHUTDOWN_NODE = "RESPONSE_SHUTDOWN_NODE"
-RESPONSE_RETRIEVE = "RESPONSE_RETRIEVE"
+RESPONSE_RETRIEVE = "RETRIEVE"
 
 __wait_check = False
 __request_shutdown_check = False
@@ -63,9 +58,6 @@ def send_heartbeats(socket):
         if current_raft_state != RAFT_LEADER:
             time.sleep(heartbeat_interval)
             continue
-        
-        request_id = f"{my_node_id}_{current_term}"
-        start_time = time.time_ns()
 
         #if the check fails then it will send a heartbeat to all nodes except itself
         for node in all_nodes:
@@ -93,9 +85,7 @@ def send_heartbeats(socket):
                 "previous_log_index": prev_log_index,
                 "previous_log_term": prev_log_term,
                 "entries": log[next_index[node]:next_index[node]+5],
-                "commit_index": commit_index,
-                "request_id": request_id,
-                "start_time": start_time
+                "commit_index": commit_index
             }
 
             message = json.dumps(message).encode()
@@ -143,8 +133,12 @@ def election_timeout(socket):
         voted_for = my_node_id
         votes_received = 1
 
-        request_id = f"{my_node_id}_{current_term}"
-        start_time = time.time_ns()
+        if len(log) > 0:
+            last_log_index = len(log)-1
+            last_log_term = log[-1]['term']
+        else:
+            last_log_index = -1
+            last_log_term = -1
 
         #send a request to get vote from all the other nodes in the cluster
         for node in all_nodes:
@@ -152,22 +146,13 @@ def election_timeout(socket):
             #to not send message to itself
             if node == my_node_id:
                 continue
-            
-            if len(log) > 0:
-                last_log_index = len(log)-1
-                last_log_term = log[-1]['term']
-            else:
-                last_log_index = -1
-                last_log_term = -1
 
             message = {
                 "sender_name": my_node_id,
                 "request": REQUEST_GET_VOTE,
                 "term": current_term,
                 "last_log_index": last_log_index,
-                "last_log_term": last_log_term,
-                "request_id": request_id,
-                "start_time": start_time
+                "last_log_term": last_log_term
             }
 
             message = json.dumps(message).encode()
@@ -176,7 +161,7 @@ def election_timeout(socket):
             except OSError:
                 pass
 
-def handle_request_get_vote(candidate_term, candidate_id, socket, entries, request_id, start_time, last_log_index, last_log_term):
+def handle_request_get_vote(candidate_term, candidate_id, socket, last_log_index, last_log_term):
 
     global current_term, voted_for
     
@@ -187,9 +172,7 @@ def handle_request_get_vote(candidate_term, candidate_id, socket, entries, reque
             "sender_name": my_node_id,
             "request": RESPONSE_VOTE_DENIED,
             "term": current_term,
-            "entries": log,
-            "request_id": request_id,
-            "start_time": start_time
+            "entries": log
         } 
         
         message = json.dumps(message).encode()
@@ -202,9 +185,7 @@ def handle_request_get_vote(candidate_term, candidate_id, socket, entries, reque
             "sender_name": my_node_id,
             "request": RESPONSE_VOTE_DENIED,
             "term": current_term,
-            "entries": log,
-            "request_id": request_id,
-            "start_time": start_time
+            "entries": log
         } 
         
         message = json.dumps(message).encode()
@@ -223,9 +204,7 @@ def handle_request_get_vote(candidate_term, candidate_id, socket, entries, reque
             "sender_name": my_node_id,
             "request": RESPONSE_VOTE_DENIED,
             "term": current_term,
-            "entries": log,
-            "request_id": request_id,
-            "start_time": start_time
+            "entries": log
         } 
         
         message = json.dumps(message).encode()
@@ -241,10 +220,7 @@ def handle_request_get_vote(candidate_term, candidate_id, socket, entries, reque
     message = {
         "sender_name": my_node_id,
         "request": RESPONSE_VOTE_GRANTED,
-        "term": current_term,
-        # "previous_log_index": prev_log_index,
-        # "previous_log_term": prev_log_term,
-        "entries": log
+        "term": current_term
     }
 
     message = json.dumps(message).encode()
@@ -268,7 +244,7 @@ def handle_response_vote_granted(socket):
 
     print(f"{my_node_id} is the new {current_raft_state} and the term is {current_term}, votes received {votes_received} and the number of nodes are {len(all_nodes)}")
 
-def handle_request_append_entry(leader_term, leader_node_id, socket, request_id, start_time, previous_log_index, previous_log_term, entries, leader_commit_index):
+def handle_request_append_entry(leader_term, leader_node_id, socket, previous_log_index, previous_log_term, entries, leader_commit_index):
 
     global voted_for, last_heartbeat_received, leader_id, current_raft_state, current_term, commit_index, log
     
@@ -299,9 +275,7 @@ def handle_request_append_entry(leader_term, leader_node_id, socket, request_id,
                 "term": current_term,
                 "success": False,
                 "next_index": len(log),
-                "match_index": len(log)-1,
-                "request_id": request_id,
-                "start_time": start_time
+                "match_index": len(log)-1
             } 
             message = json.dumps(message).encode()
             try:
@@ -320,10 +294,7 @@ def handle_request_append_entry(leader_term, leader_node_id, socket, request_id,
                 "term": current_term,
                 "success": False,
                 "next_index": len(log),
-                "match_index": len(log)-1,
-                "request_id": request_id,
-                "request_id": request_id,
-                "start_time": start_time
+                "match_index": len(log)-1
             } 
             message = json.dumps(message).encode()
             try:
@@ -345,9 +316,7 @@ def handle_request_append_entry(leader_term, leader_node_id, socket, request_id,
         "success": True,
         "next_index": follower_next_index,
         "match_index": follower_match_index,
-        "commit_index": commit_index,
-        "request_id": request_id,
-        "start_time": start_time
+        "commit_index": commit_index
     } 
         
     message = json.dumps(message).encode()
@@ -359,11 +328,6 @@ def handle_request_append_entry(leader_term, leader_node_id, socket, request_id,
 def handle_response_entry_appended(follower_next_index, follower_nodeid, follower_match_index):
 
     global commit_index
-
-    #to resolve UDP connection request-response action
-    #to ensure we only process the latest response
-    if follower_next_index < next_index[follower_nodeid] or follower_match_index < match_index[follower_nodeid]:
-        return
     
     next_index[follower_nodeid] = follower_next_index
     match_index[follower_nodeid] = follower_match_index
@@ -381,11 +345,6 @@ def handle_response_entry_appended(follower_next_index, follower_nodeid, followe
         
 def handle_response_entry_failed(follower_next_index, follower_nodeid):
     global next_index
-
-    #to resolve UDP connection request-response action
-    #to ensure we only process the latest response
-    if follower_next_index < next_index[follower_nodeid]:
-        return
 
     next_index[follower_nodeid] = follower_next_index
 
@@ -424,21 +383,27 @@ def handle_request_timeout(socket):
     voted_for = my_node_id
     votes_received = 1
 
-        #send a request to get vote from all the other nodes in the cluster
-        #print(f"All nodes in election timeout:{all_nodes}")
+    if len(log) > 0:
+        last_log_index = len(log)-1
+        last_log_term = log[-1]['term']
+    else:
+        last_log_index = -1
+        last_log_term = -1
+
+    #send a request to get vote from all the other nodes in the cluster
+    #print(f"All nodes in election timeout:{all_nodes}")
     for node in all_nodes:
 
         #to not send message to itself
         if node == my_node_id:
             continue
-        
+
         message = {
             "sender_name": my_node_id,
             "request": REQUEST_GET_VOTE,
             "term": current_term,
-            # "previous_log_index": prev_log_index,
-            # "previous_log_term": prev_log_term,
-            "entries": log
+            "last_log_index": last_log_index,
+            "last_log_term": last_log_term
         }
 
         message = json.dumps(message).encode()
@@ -457,10 +422,7 @@ def handle_request_shutdown(socket):
         message = {
             "sender_name": my_node_id,
             "request": RESPONSE_SHUTDOWN_NODE,
-            "term": current_term,
-            # "previous_log_index": prev_log_index,
-            # "previous_log_term": prev_log_term,
-            "entries": log
+            "term": current_term
         }
         message = json.dumps(message).encode()
         socket.sendto(message, (node, port))
@@ -477,9 +439,15 @@ def handle_request_store(socket, entries, controller_address):
     if current_raft_state == RAFT_LEADER:
         for i in range(len(entries)):
             log.append({'term':current_term, 'value':entries[i]})
-
-
         print(f'Leader id is {my_node_id} and entries are {log}')
+        message = {
+            "sender_name": my_node_id,
+            "success": True
+        }
+
+        message = json.dumps(message).encode()
+        socket.sendto(message, controller_address)
+
     else:
         print(f"Node: {my_node_id} \n Leader: {leader_id} \n Term: {current_term} \n Current raft state: {current_raft_state}")
         message = {
@@ -499,7 +467,7 @@ def handle_request_retrieve(controller_address, socket):
 
         message = {
             "sender_name": my_node_id,
-            "request": RESPONSE_LEADER_INFO,
+            "request": RESPONSE_RETRIEVE,
             "term": current_term,
             "key": "COMMITTED_LOGS",
             "value": log
@@ -509,7 +477,7 @@ def handle_request_retrieve(controller_address, socket):
         socket.sendto(message, controller_address)
     
     else:
-        print(f"Node: {my_node_id} \n Leader: {leader_id} \n Term: {current_term} \n Current raft state: {current_raft_state}")
+        print(f"Node: {my_node_id} \n Leader: {leader_id} \n Term: {current_term} \n Current raft state: {current_raft_state} \n Logs: {log}")
         message = {
             "sender_name": my_node_id,
             "request": RESPONSE_LEADER_INFO,
@@ -546,24 +514,18 @@ class RequestHandler(socketserver.DatagramRequestHandler):
         match_index = data.get("match_index", None)
         last_log_index = data.get("last_log_index", None)
         last_log_term = data.get("last_log_term", None)
-        request_id = data.get("request_id", None)
-        start_time = data.get("start_time", None)
-
-
-        if request_id is not None and request_id.startswith(str(my_node_id)):
-            time_elapsed = time.time_ns() - start_time
-            #print(f"Request-Response time for {my_node_id} is {time_elapsed/1000000}")
-
 
         #check for thre request being passed
         if request == REQUEST_GET_VOTE:
-            return handle_request_get_vote(term, sender_name, socket, entries, request_id, start_time, last_log_index, last_log_term)
+            if last_log_index is None or last_log_term is None:
+                print(self.request[0].strip())
+            return handle_request_get_vote(term, sender_name, socket, last_log_index, last_log_term)
 
         if request == RESPONSE_VOTE_GRANTED:
             return handle_response_vote_granted(socket)
         
         if request == REQUEST_APPEND_ENTRY:
-            return handle_request_append_entry(term, sender_name, socket, request_id, start_time, previous_log_index, previous_log_term, entries, leader_commit_index)
+            return handle_request_append_entry(term, sender_name, socket, previous_log_index, previous_log_term, entries, leader_commit_index)
         
         if request == RESPONSE_APPEND_ENTRY_FAILED:
             return handle_response_entry_failed(next_index, sender_name)
@@ -573,16 +535,16 @@ class RequestHandler(socketserver.DatagramRequestHandler):
         
         if request == REQUEST_CONVERT_FOLLOWER:
             #set delay to prevent abrupt behaviour
-            handle_request_convert_follower()
+            return handle_request_convert_follower()
         
         if request == REQUEST_LEADER_INFO:
-            handle_request_leader_info(controller_address, socket)
+            return handle_request_leader_info(controller_address, socket)
 
         if request == REQUEST_SHUTDOWN:
-            handle_request_shutdown(socket)
+            return handle_request_shutdown(socket)
         
         if request == RESPONSE_SHUTDOWN_NODE:
-            handle_response_shutdown(sender_name)
+            return handle_response_shutdown(sender_name)
 
         if request == REQUEST_TIMEOUT:
             return handle_request_timeout(socket)
@@ -591,7 +553,7 @@ class RequestHandler(socketserver.DatagramRequestHandler):
             return handle_request_store(socket, entries, controller_address)
         
         if request == REQUEST_RETRIEVE:
-            handle_request_retrieve(controller_address, socket)     
+            return handle_request_retrieve(controller_address, socket)     
             
 if __name__ == "__main__":
 
