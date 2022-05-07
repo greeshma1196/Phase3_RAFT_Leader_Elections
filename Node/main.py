@@ -35,6 +35,7 @@ REQUEST_TIMEOUT = "TIMEOUT"
 REQUEST_SHUTDOWN = "SHUTDOWN"
 REQUEST_STORE = "STORE"
 REQUEST_RETRIEVE = "RETRIEVE"
+REQUEST_RESTART = "RESTART"
 RESPONSE_VOTE_DENIED = "VOTE_DENIED"
 RESPONSE_VOTE_GRANTED = "VOTE_ACK"
 RESPONSE_ENTRY_APPENDED = "ENTRY_APPENDED"
@@ -42,6 +43,7 @@ RESPONSE_APPEND_ENTRY_FAILED = "ENTRY_APPEND_FAILED"
 RESPONSE_LEADER_INFO = "LEADER_INFO"
 RESPONSE_SHUTDOWN_NODE = "RESPONSE_SHUTDOWN_NODE"
 RESPONSE_RETRIEVE = "RETRIEVE"
+RESPONSE_RESTART_NODE = "RESPONSE_RESTART_NODE"
 
 __wait_check = False
 __request_shutdown_check = False
@@ -60,6 +62,7 @@ def send_heartbeats(socket):
             continue
 
         #if the check fails then it will send a heartbeat to all nodes except itself
+        
         for node in all_nodes:
 
             if node == my_node_id:
@@ -430,6 +433,32 @@ def handle_response_shutdown(node):
 
     all_nodes.remove(node)
 
+def handle_request_restart(node, socket):
+
+    global all_nodes,  __request_shutdown_check
+
+    print(f"Restarting node: {node}")
+    all_nodes.append(node)
+
+    __request_shutdown_check = False
+
+    for node in all_nodes:
+        if node == my_node_id:
+            continue
+        message = {
+            "sender_name": my_node_id,
+            "request": RESPONSE_RESTART_NODE,
+            "term": current_term
+        }
+        message = json.dumps(message).encode()
+        socket.sendto(message, (node, port))
+
+def handle_response_restart(node):
+
+    global all_nodes
+
+    all_nodes.append(node)
+
 def handle_request_store(socket, entries, controller_address):
     global log
 
@@ -551,6 +580,12 @@ class RequestHandler(socketserver.DatagramRequestHandler):
         
         if request == REQUEST_RETRIEVE:
             return handle_request_retrieve(controller_address, socket)     
+        
+        if request == REQUEST_RESTART:
+            return handle_request_restart(sender_name, socket)
+        
+        if request == RESPONSE_RESTART_NODE:
+            return handle_response_restart(sender_name)
             
 if __name__ == "__main__":
 
